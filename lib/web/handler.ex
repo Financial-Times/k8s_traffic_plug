@@ -20,19 +20,21 @@ defmodule FT.K8S.TrafficDrainHandler do
 
   Call `start_link/1` from your Application's `start/2` function, or add this module to a supervisor (it
   supports `child_spec/1`), passing an optional `shutdown_delay_ms` for the time between entering
-  'connection draining mode' and `System.stop/0`.
+  'connection draining mode' and `System.stop/0`, e.g.:
+
+  ```
+  Supervisor.start_link([
+    {FT.K8S.TrafficDrainHandler, [shutdown_delay_ms: 5000]}
+  ], strategy: :one_for_one)
+  ```
 
   The delay should be long enough to allow long running requests to finish, and smaller than
   the [K8S grace period](https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods)
   (30 seconds by default), else K8S will terminate the VM with `SIGKILL` before it can shut down
   gracefully. If not specified the delay is 20,000ms.
 
-  ```
-  {ok, pid} = FT.K8S.TrafficDrainHandler.start_link(shutdown_delay_ms: 10_000)
-  ```
-
-  You may not want to install the handler in `:dev` mode, since it will delay stopping the
-  app: use conditional compilation.
+  You may not want to install the handler in `:dev` environment, since it will delay stopping the
+  app: use environment specific configuation to set a lower delay or exclude the handler.
   """
 
   if(hd(:erlang.system_info(:otp_release)) < ?2, do: raise("#{__MODULE__} Needs OTP 20+"))
@@ -46,10 +48,14 @@ defmodule FT.K8S.TrafficDrainHandler do
 
   Delegates to `k8s_signal_handler` module (written in Erlang).
 
+  Returns `:ignore` (which is a NOP as far as supervisors are concerned), because
+  the process is actually started, and supervised, by `erl_signal_server`.
+
   ## Options
   * `shutdown_delay_ms` - milliseconds between start of connection draining and ordered
     shut-down using `System.stop/0`.
   * `test_mode` - for testing: for details see `k8s_signal_handler.erl`.
+
   """
   def start_link(opts) do
     Logger.debug(fn -> "#{__MODULE__} start_link #{inspect opts}" end)
@@ -59,13 +65,11 @@ defmodule FT.K8S.TrafficDrainHandler do
     :k8s_signal_handler.start_link([@table_name, delay, test_mode])
   end
 
-  @doc "child spec for supervision"
+  @doc "child spec for use with supervisor"
   def child_spec(opts) do
     %{
       id: __MODULE__,
-      start: {__MODULE__, :start_link, [opts]},
-      type: :worker,
-      shutdown: 10
+      start: {__MODULE__, :start_link, [opts]}
     }
   end
 

@@ -4,7 +4,7 @@ defmodule K8sTrafficPlug.Mixfile do
   def project do
     [
       app: :k8s_traffic_plug,
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.5",
       start_permanent: Mix.env == :prod,
       deps: deps()

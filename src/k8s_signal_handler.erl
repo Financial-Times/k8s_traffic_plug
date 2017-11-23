@@ -21,8 +21,12 @@
 %%
 %% Supplying `true` for `Test` simply supresses the `init:stop/1` call.
 %%
+%% Returns `ignore` since this doesn't actually start a process itself,
+%% it gets the `gen_event` server to start one.
+%%
 start_link([Table, Delay, Test]) ->
-    % create a named table to store the draining state.
+    % create a named table to store the draining state; it will
+    % 'belong' to the calling proc, e.g. a supervisor.
     case ets:info(Table) of
       undefined ->
         ets:new(Table, [named_table, public, {read_concurrency, true}]);
@@ -30,17 +34,19 @@ start_link([Table, Delay, Test]) ->
         ok
     end,
 
-    {ok, Pid} = gen_event:start_link({local, k8s_signal_handler}),
-    ets:give_away(Table, Pid, []),
-    ok = gen_event:add_sup_handler(erl_signal_server, k8s_signal_handler, [Table, Delay, Test]),
-    gen_event:delete_handler(erl_signal_server, erl_signal_handler, []),
-    {ok, Pid}.
+    ok = gen_event:swap_sup_handler(
+        erl_signal_server,
+        {erl_signal_handler, []},
+        {k8s_signal_handler, [Table, Delay, Test]}),
 
-init([Table, Delay, Test]) ->
+    ignore.
+
+% note weird signature because we use gen_event:swap_sup_handler/3
+init({[Table, Delay, Test], _}) ->
     {ok, {Table, Delay, Test}}.
 
 handle_event(sigterm, {Table, Delay, Test} = State) ->
-    io:format("***K8STrafficDrain: SIGTERM received. Draining and then stopping in ~p ms~n", [Delay]),
+    io:format("~n~n***K8STrafficDrain: SIGTERM received. Draining and then stopping in ~p ms~n", [Delay]),
     ets:insert(Table, {draining, true}),
     case Test of
         Pid when is_pid(Pid) ->
@@ -56,7 +62,7 @@ handle_event(ErrorMsg, S) ->
     {ok, S}.
 
 handle_info(stop, {_, _, Test} = State) ->
-    io:format("***K8STrafficDrain: Stopping due to earlier SIGTERM~n", []),
+    io:format("~n~n***K8STrafficDrain: Stopping due to earlier SIGTERM~n", []),
     case Test of
         Pid when is_pid(Pid) ->
             erlang:send(Pid, {stopping, State});
@@ -76,5 +82,5 @@ handle_call(_Request, State) ->
 terminate(_Args, {_, _, false}) ->
     ok;
 terminate(_Args, _State) ->
-    io:format("***K8STrafficDrain: Handler Terminating~n", []),
+    io:format("~n~n***K8STrafficDrain: Handler Terminating~n", []),
     ok.
