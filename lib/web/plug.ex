@@ -35,14 +35,21 @@ defmodule FT.K8S.TrafficDrainPlug do
   """
 
   import Plug.Conn
-
   @behaviour Plug
 
   @impl true
-  def init(options), do: options
+  def init(options) do
+    Keyword.get(options, :request_path, "/__traffic")
+  end
 
   @impl true
-  def call(conn = %{path_info: ["__traffic"]}, _config) do
+  def call(%Plug.Conn{request_path: path} = conn, path), do: draining_request(conn)
+
+  @impl true
+  def call(conn, _config), do: conn
+
+  @impl true
+  defp draining_request(conn) do
     draining = FT.K8S.TrafficDrainHandler.draining?()
 
     case draining do
@@ -58,8 +65,5 @@ defmodule FT.K8S.TrafficDrainPlug do
         |> halt
     end
   end
-
-  @impl true
-  def call(conn, _config), do: conn
 
 end
