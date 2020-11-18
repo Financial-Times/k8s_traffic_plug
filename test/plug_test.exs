@@ -64,6 +64,36 @@ defmodule K8STrafficDrainPlugTest do
     assert_receive {:stopping, _}
   end
 
+  test "configured path endpoint returns 200 normally with custom table name" do
+    start_supervised({@handler, [shutdown_delay_ms: 10, test_mode: true, table_name: :test123]})
+
+    refute @handler.draining?(:test123)
+
+    conn = conn(:get, "/test123")
+    config = FT.K8S.TrafficDrainPlug.init([request_path: "/test123", table_name: :test123])
+    conn = FT.K8S.TrafficDrainPlug.call(conn, config)
+    assert conn.status == 200
+    assert conn.halted
+    refute @handler.draining?(:test123)
+  end
+
+  test "configured path endpoint returns 500 when draining with custom table name" do
+    start_supervised({@handler, [shutdown_delay_ms: 10, test_mode: self(), table_name: :test123]})
+
+    :gen_event.notify(:erl_signal_server, :sigterm)
+    assert_receive :draining
+
+    assert @handler.draining?(:test123)
+
+    conn = conn(:get, "/test123")
+    config = FT.K8S.TrafficDrainPlug.init([request_path: "/test123", table_name: :test123])
+    conn = FT.K8S.TrafficDrainPlug.call(conn, config)
+    assert conn.status == 500
+    assert conn.halted
+
+    assert_receive {:stopping, _}
+  end
+
   test "plug passes through other requests (/)" do
     start_supervised({@handler, [shutdown_delay_ms: 10, test_mode: true]})
     conn = conn(:get, "/")
