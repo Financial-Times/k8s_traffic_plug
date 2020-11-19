@@ -51,7 +51,6 @@ defmodule FT.K8S.TrafficDrainPlug do
   @impl true
   def call(conn, _config), do: conn
 
-  @impl true
   defp draining_request(conn, table_name) do
     draining = FT.K8S.TrafficDrainHandler.draining?(table_name)
 
