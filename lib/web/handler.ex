@@ -41,8 +41,6 @@ defmodule FT.K8S.TrafficDrainHandler do
 
   require Logger
 
-  @table_name __MODULE__
-
   @doc """
   Start the signal handler.
 
@@ -55,14 +53,16 @@ defmodule FT.K8S.TrafficDrainHandler do
   * `shutdown_delay_ms` - milliseconds between start of connection draining and ordered
     shut-down using `System.stop/0`.
   * `test_mode` - for testing: for details see `k8s_signal_handler.erl`.
+  * `table_name` - sets the ets table name, `:connection_drain_table` by default.
 
   """
   def start_link(opts) do
     Logger.debug(fn -> "#{__MODULE__} start_link #{inspect opts}" end)
     delay = Keyword.get(opts, :shutdown_delay_ms, 20_000)
     test_mode = Keyword.get(opts, :test_mode, false)
+    table_name = Keyword.get(opts, :table_name, :connection_drain_table)
 
-    :k8s_signal_handler.start_link([@table_name, delay, test_mode])
+    :k8s_signal_handler.start_link([table_name, delay, test_mode])
   end
 
   @doc "child spec for use with supervisor"
@@ -74,9 +74,12 @@ defmodule FT.K8S.TrafficDrainHandler do
   end
 
   @doc "Has 'connection draining' mode has been entered?"
-  @spec draining?() :: boolean
-  def draining? do
-    case :ets.lookup(@table_name, :draining) do
+  @spec draining?(atom) :: boolean
+  def draining?, do: real_draining?(:connection_drain_table)
+  def draining?(table_name), do: real_draining?(table_name)
+
+  defp real_draining?(table_name) do
+    case :ets.lookup(table_name, :draining) do
       [] -> false
       [{:draining, draining}] -> draining
     end
