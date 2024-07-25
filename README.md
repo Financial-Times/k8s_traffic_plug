@@ -1,3 +1,5 @@
+# !!! This repository would be changed to private on 30th of September !!!
+
 # Kubernetes Traffic Plug
 
 Support for graceful server shutdown under Kubernetes [termination life-cycle](s://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods).
