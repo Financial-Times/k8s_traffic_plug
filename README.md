@@ -1,4 +1,4 @@
-# !!! This repository would be changed to private on 30th of September !!!
+# !!! This repository would be archived on 30th of September !!!
 
 # Kubernetes Traffic Plug
 
